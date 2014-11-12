@@ -328,7 +328,7 @@ class ParticleFilter(object):
             p__ = symetrize_cov(p__)
             #
             # 2. Update
-            G = self.model.getG() #TODO
+            G = self.model.getG()
             R = self.model.R
             yi = np.apply_along_axis(self.model.h, 1, xi, k=k)
             wi = np.apply_along_axis(scipy.stats.multivariate_normal(Y[k], G.dot(R).dot(G.T)).pdf, 1, yi)
@@ -428,15 +428,20 @@ class QuadratureFilter(object):
             
             #
             # 3. Get estimates
-            K = mo.mrdivide(C, S)
-            #TODO: K = C.dot(np.linalg.inv(S))
             eps = Y[k] - to_row(mu)
             eps = to_column(eps)
+            
+            # TODO: Version with K computed
+            # K = mo.mrdivide(C, S)
+            # K = C.dot(np.linalg.inv(S))
+            # x_ = x__ + K.dot(eps)
+            # p_ = p__ - K.dot(S).dot(K.T)
+            # p_ = symetrize_cov(p_)
 
-            #TODO: x_ = x__ + K.dot(eps)
+            # TODO: Version without direct computation of K
             x_ = x__ + C.dot(mo.mldivide(S, eps))
-            p_ = p__ - K.dot(S).dot(K.T)
-            p_ = symetrize_cov(p_)
+            p_ = p__ - C.dot(mo.mrdivide(C,S).T)
+            p_ = symetrize_cov(p_)       
             
             #
             # 4. Save results
@@ -555,11 +560,16 @@ class QuadratureFilter(object):
         
         # Initiale Sigma and CC
         Sigma_ = CC_ = None     
-
-        # Compute mean, cov matrix and cross cov matrix
+        
+        # TODO: Sigma computation as closed form
+        Sigma_ = w_0/np.sqrt(np.linalg.det( 2*mo.mldivide(A,P) + I) ) - (z.T).dot(mo.mldivide(K,z))
+        
+        # Compute cov matrix and cross cov matrix
         for i in range(0,len(W)):
-            YY_i   = ( to_column(Y[i]-mu_) ).dot( to_row(Y[i]-mu_) )
-            Sigma_ = W[i] * YY_i if i == 0 else Sigma_ + W[i] * YY_i
+        
+            # TODO: Sigma computation as sumation
+            # YY_i   = ( to_column(Y[i]-mu_) ).dot( to_row(Y[i]-mu_) )
+            # Sigma_ = W[i] * YY_i if i == 0 else Sigma_ + W[i] * YY_i
             
             XY_i = ( to_column(X[i]-m) ).dot( to_row(Y[i]-mu_) )
             CC_  = W[i] * XY_i if i == 0 else CC_ + W[i] * XY_i
