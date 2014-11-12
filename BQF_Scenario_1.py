@@ -29,24 +29,24 @@ random.seed(RAND_SEED)
 np.random.seed(RAND_SEED)
     
 # Parameters:
-N_TIME_STEPS = 10
+N_TIME_STEPS = 25
 KAPPA = 2.0
 N_PARTICLES = 1000
     
 # Define model:
 model = bqf.SystemModel(f_type='linear', h_type='linear')
 T = 1
-model.A = np.array([[1, 0, T, 0], [0, 1, 0, T], [0, 0, T, 0], [0, 0, 0, T]])
+model.A = np.array([[.5, 0, T, 0], [0, .5, 0, T], [0, 0, T, 0], [0, 0, 0, T]])
 model.B = np.array([[T**2/2, 0], [0, T**2/2], [T, 0], [0, T]])
 model.F = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
 model.G = np.eye(2)
     
 model.Q = np.diag([ 1, 1])
-model.R = np.diag([ 1, 1])
+model.R = np.diag([ 1, 1]) * .5
     
 # Initial conditions:
-x0 = np.array([[0,0,1,0]])
-p0 = np.diag([1]*4)
+x0 = np.array([[0, 0, 0, 0]])
+p0 = np.diag([1, 1, 1, 1])
     
 # Define states and observationsA
 X_noise = np.random.multivariate_normal(np.array([0,0]), model.Q, N_TIME_STEPS)
@@ -73,7 +73,7 @@ pf = bqf.ParticleFilter(model, n_particles=N_PARTICLES)
 pf_X_, X__, P_, P__ = pf.filtering(x0, p0, Y)
     
 ''' ----- QF ----- '''
-N_SAMPLES = 32
+N_SAMPLES = 36
 KERNEL    = GPy.kern.RBF(input_dim = 4, ARD=True)  
     
 def K_CONST(gp):
@@ -81,7 +81,7 @@ def K_CONST(gp):
     
     gp.rbf.variance.constrain_fixed(1.0, warning=False)        
     gp.rbf.lengthscale.constrain_fixed(3.0, warning=False)
-    gp.Gaussian_noise.variance.constrain_fixed(0.0001**2, warning=False) 
+    gp.Gaussian_noise.variance.constrain_fixed(0.001**2, warning=False) 
      
     return(gp, NUM_RESTARTS)
       

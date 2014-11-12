@@ -66,10 +66,8 @@ class SystemModel(object):
         self.R = None
         
         # Derivatives of nonlinear model:
-        self.funA = None
-        self.funB = None
-        self.funF = None
-        self.funG = None
+        self.der_f = None
+        self.der_h = None
         
     # Propagation:   
     def f(self, x_, k=None):
@@ -92,23 +90,20 @@ class SystemModel(object):
         if self._f_type == 'linear':
             return(self.A)
         else:
-            return(self.funA(x_, k))
+            return(self.der_f(x_, k))
+            
     def getB(self, x_=None, k=None):
-        if self._f_type == 'linear':
-            return(self.B)
-        else:
-            return(self.funB(x_, k))
+        return(self.B)
 
     def getF(self, x_=None, k=None):
         if self._h_type == 'linear':
             return(self.F)
         else:
-            return(self.funF(x_, k))        
+            return(self.der_h(x_, k))   
+            
     def getG(self, x_=None, k=None):
-        if self._h_type == 'linear':
-            return(self.G)
-        else:
-            return(self.funG(x_, k))   
+        return(self.G)
+
             
 #%%
 #
@@ -143,7 +138,7 @@ class KalmanFilter(object):
                 B = self.model.getB(x_, k)
                 Q = self.model.Q
                 
-                x__, p__ = A.dot(x_) , A.dot(p_).dot(A.T) + B.dot(Q).dot(B.T)
+                x__, p__ = self.model.f(x_, k) , A.dot(p_).dot(A.T) + B.dot(Q).dot(B.T)
                 p__ = symetrize_cov(p__)
             #
             # 2. Update
@@ -157,7 +152,7 @@ class KalmanFilter(object):
             # K = (p__).dot(mo.mrdivide(F.T, S))
             K = (p__).dot(F.T).dot(np.linalg.inv(S))
             
-            y_hat = F.dot(x__)
+            y_hat = self.model.h(x__, k)
             eps = np.array([Y[k]]).T - y_hat            
             x_ = x__ + K.dot(eps)
             p_ = (np.eye(self.X_DIM) - K.dot(F)).dot(p__)
