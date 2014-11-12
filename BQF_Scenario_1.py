@@ -29,9 +29,9 @@ random.seed(RAND_SEED)
 np.random.seed(RAND_SEED)
     
 # Parameters:
-N_TIME_STEPS = 5
+N_TIME_STEPS = 10
 KAPPA = 2.0
-N_PARTICLES = 100
+N_PARTICLES = 1000
     
 # Define model:
 model = bqf.SystemModel(f_type='linear', h_type='linear')
@@ -73,14 +73,14 @@ pf = bqf.ParticleFilter(model, n_particles=N_PARTICLES)
 pf_X_, X__, P_, P__ = pf.filtering(x0, p0, Y)
     
 ''' ----- QF ----- '''
-N_SAMPLES = 16
+N_SAMPLES = 32
 KERNEL    = GPy.kern.RBF(input_dim = 4, ARD=True)  
     
 def K_CONST(gp):
     NUM_RESTARTS = 8
     
     gp.rbf.variance.constrain_fixed(1.0, warning=False)        
-    gp.rbf.lengthscale.constrain_fixed(1.0, warning=False)
+    gp.rbf.lengthscale.constrain_fixed(3.0, warning=False)
     gp.Gaussian_noise.variance.constrain_fixed(0.0001**2, warning=False) 
      
     return(gp, NUM_RESTARTS)

@@ -19,7 +19,7 @@ import time
 import sys
 
 
-RAND_SEED = 5
+RAND_SEED = 7
 random.seed(RAND_SEED)
 np.random.seed(RAND_SEED)
     
@@ -231,12 +231,12 @@ if __name__ == "__main__":
     MC_RUNS      = 1      # Number of MC runs
             
     N_TIME_STEPS = 10    # Number of filtering time steps
-    N_SAMPLES    = 24      # Number of samples for quadrature filter
+    N_SAMPLES    = 2      # Number of samples for quadrature filter
     N_PARTICLES  = 1000    # Number of particles for PF
     
     x0_mu          = 0.0
-    x0_sigma2      = 5.0
-    x_noise_sigma2 = 10.0
+    x0_sigma2      = 1.0
+    x_noise_sigma2 = 1.0
     x_noise_std    = np.sqrt(x_noise_sigma2)
     y_noise_sigma2 = 1.0
     y_noise_std    = np.sqrt(y_noise_sigma2)
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     Q = x_noise_sigma2
     R = y_noise_sigma2
     
-    FILTERING_METHODS = ['KF','UKF'] # ['QF', 'PF', 'KF', 'UKF']    
+    FILTERING_METHODS = ['KF','UKF', 'PF', 'QF'] # ['QF', 'PF', 'KF', 'UKF']    
 
     #%% RUN MONTE CARLO
     MC_QF_err = [];  MC_KF_err = [];  MC_PF_err = [];  MC_UKF_err = []

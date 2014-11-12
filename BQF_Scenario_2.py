@@ -23,7 +23,7 @@ import GPy
 
 
 # Set random SEED:    
-RAND_SEED = 27
+RAND_SEED = 7
 random.seed(RAND_SEED)
 np.random.seed(RAND_SEED)
 
@@ -74,17 +74,17 @@ pf_X_, X__, P_, P__ = pf.filtering(x0, p0, Y)
 ''' ----- QF ----- '''
 N_SAMPLES = 2
 KERNEL    = GPy.kern.RBF(input_dim = 1, ARD=True)  
+OPT_PAR = {"MAX_T": 100, "MAX_F": 100}
 
 def K_CONST(gp):
-    NUM_RESTARTS = 8
+    NUM_RESTARTS = 16
     
     gp.rbf.variance.constrain_fixed(1.0, warning=False)        
-    gp.rbf.lengthscale.constrain_fixed(1.0, warning=False)
+    gp.rbf.lengthscale.constrain_fixed(3.0, warning=False)
     gp.Gaussian_noise.variance.constrain_fixed(0.0001**2, warning=False) 
     
     return(gp, NUM_RESTARTS)
     
-OPT_PAR = {"MAX_T": 3000, "MAX_F": 3000}
 qf = bqf.QuadratureFilter(model, KERNEL, N_SAMPLES, K_CONST,  OPT_PAR)
 qf_X_, qf_X__, qf_P_, qf_P__ = qf.filtering(x0, p0, Y)    
 

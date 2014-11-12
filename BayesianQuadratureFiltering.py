@@ -514,7 +514,7 @@ class QuadratureFilter(object):
         gp = self.gp_fit(X,Y)
         
         # Optimization constraints:
-        N_SIGMA = 6
+        N_SIGMA = 3
         P_diag = np.sqrt(np.diag(P))
         lower_const = (m - N_SIGMA*P_diag)[0].tolist()
         upper_const = (m + N_SIGMA*P_diag)[0].tolist()
@@ -535,14 +535,14 @@ class QuadratureFilter(object):
             
         # Reoptimize GP:                             
         # TODO: Remove unique rows:
-        # X  = unique_rows(X)
-        # Y  = np.apply_along_axis(fun, 1, X, **kwargs)
-        # gp = self.gp_fit(X, Y)   
+        X  = unique_rows(X)
+        Y  = np.apply_along_axis(fun, 1, X, **kwargs)
+        gp = self.gp_fit(X, Y)   
             
         # Compute integral
         # Fitted GP parameters      
         w_0 = gp.rbf.variance.tolist()[0]
-        w_d = gp.rbf.lengthscale.tolist()
+        w_d = np.power(gp.rbf.lengthscale.tolist(), 2)
         
         # Prior parameters
         A = np.diag(w_d)
@@ -558,8 +558,10 @@ class QuadratureFilter(object):
         mu_ = (z.T).dot( mo.mldivide(K, Y) )
         mu_ = to_row(mu_)
         
+        # Initiale Sigma and CC
         Sigma_ = CC_ = None     
 
+        # Compute mean, cov matrix and cross cov matrix
         for i in range(0,len(W)):
             YY_i   = ( to_column(Y[i]-mu_) ).dot( to_row(Y[i]-mu_) )
             Sigma_ = W[i] * YY_i if i == 0 else Sigma_ + W[i] * YY_i
