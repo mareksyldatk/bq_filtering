@@ -21,17 +21,17 @@ import numpy as np
 import random
 import GPy
 
-# pp.close('all')
+pp.close('all')
 
 # Set random SEED:    
-RAND_SEED = 7
+RAND_SEED = 1
 random.seed(RAND_SEED)
 np.random.seed(RAND_SEED)
     
 # Parameters:
 N_TIME_STEPS = 25
 KAPPA = 2.0
-N_PARTICLES = 1000
+N_PARTICLES = 100
     
 # Define model:
 model = bqf.SystemModel(f_type='linear', h_type='linear')
@@ -73,19 +73,20 @@ pf = bqf.ParticleFilter(model, n_particles=N_PARTICLES)
 pf_X_, X__, P_, P__ = pf.filtering(x0, p0, Y)
     
 ''' ----- QF ----- '''
-N_SAMPLES = 36
+N_SAMPLES = 32
 KERNEL    = GPy.kern.RBF(input_dim = 4, ARD=True)  
     
 def K_CONST(gp):
-    NUM_RESTARTS = 8
+    # Toggle off optimization
+    NUM_RESTARTS = 0
     
     gp.rbf.variance.constrain_fixed(1.0, warning=False)        
     gp.rbf.lengthscale.constrain_fixed(3.0, warning=False)
-    gp.Gaussian_noise.variance.constrain_fixed(0.001**2, warning=False) 
+    gp.Gaussian_noise.variance.constrain_fixed(0.0001**2, warning=False) 
      
     return(gp, NUM_RESTARTS)
       
-OPT_PAR = {"MAX_T": 100, "MAX_F": 100}
+OPT_PAR = {"MAX_T": 333, "MAX_F": 333}
 qf = bqf.QuadratureFilter(model, KERNEL, N_SAMPLES, K_CONST, OPT_PAR)
 qf_X_, qf_X__, qf_P_, qf_P__ = qf.filtering(x0, p0, Y)
    
@@ -98,3 +99,9 @@ for i in range(0,4):
     pp.plot(ukf_X_[:,i], '--g')
     pp.plot(pf_X_[:,i], '.-b')
     pp.plot(qf_X_[:,i], '.-m')
+    
+# Print RMSE:
+print ("RMSE for EKF: " + str( np.sqrt(np.sum(np.power((X_true- kf_X_),2))/N_TIME_STEPS) ) )
+print ("RMSE for UKF: " + str( np.sqrt(np.sum(np.power((X_true-ukf_X_),2))/N_TIME_STEPS) ) )
+print ("RMSE for PF:  " + str( np.sqrt(np.sum(np.power((X_true- pf_X_),2))/N_TIME_STEPS) ) )
+print ("RMSE for QF:  " + str( np.sqrt(np.sum(np.power((X_true- qf_X_),2))/N_TIME_STEPS) ) )

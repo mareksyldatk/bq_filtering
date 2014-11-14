@@ -389,7 +389,7 @@ class QuadratureFilter(object):
         self.k_const   = k_const
         self.N_SAMPLES = n_samples
         if (opt_par == None):
-            self.opt_par = {"MAX_T": 1000, "MAX_F": 3000}
+            self.opt_par = {"MAX_T": 1000, "MAX_F": 3000, "GRID_SIZE": 100}
         else:
             self.opt_par = opt_par
             
@@ -406,6 +406,7 @@ class QuadratureFilter(object):
         #
         # FILTERING LOOP
         for k in range(0, N_TIME_STEPS): 
+            print(str(k) + "/" + str(N_TIME_STEPS))
             #
             # 1. Prediction    
             if(k == 0):
@@ -460,15 +461,25 @@ class QuadratureFilter(object):
         gp = user_data['gp']
         m  = user_data['m']
         P  = user_data['P']
-                
-        m = to_row(m) 
-        X = to_row(X)
-             
-        _, gp_cov = gp.predict(X)
-        pi_x = self.pi(X.squeeze(), m.squeeze(), P)
-        cost = (pi_x**2 * gp_cov).squeeze()
-        
-        return( -cost , 0 )
+        grid_search = user_data['grid_search']
+                        
+        if (grid_search == True):
+            ''' GRID SEARCH: reformulate the objective for grid search '''
+            _, gp_cov = gp.predict(X)
+            pi_x = self.pi(to_column(X), m.squeeze(), P)
+            pi_x   = pi_x.squeeze().tolist()
+            gp_cov = gp_cov.squeeze().tolist()            
+            cost = (np.power(pi_x,2) * gp_cov).squeeze().tolist()                   
+            
+            return( cost )            
+        else:
+            ''' OPTIMIZATION: reformulate the objective for optimization '''
+            m = to_row(m) 
+            X = to_row(X) 
+            _, gp_cov = gp.predict(X)
+            pi_x = self.pi(X.squeeze(), m.squeeze(), P)
+            cost = (pi_x**2 * gp_cov).squeeze()
+            return( -cost , 0 )
 
     def gp_fit(self, X, Y):
         # Regression
@@ -476,12 +487,9 @@ class QuadratureFilter(object):
         # Constraints
         gp, NUM_RESTARTS = self.k_const(gp) if (self.k_const != None) else (gp, 8)
         # Optimize
-        try:
+        if (NUM_RESTARTS != 0 ):
             gp.optimize_restarts(num_restarts=NUM_RESTARTS, verbose=False, parallel=True)
-            print("GP optimization finished!") 
-        except:
-            print("All parameters fixed (or error): GP optimization skipped!") 
-        
+
         return(gp)
         
     def compute_z(self, a, A, b, B, I, w_0):
@@ -522,22 +530,36 @@ class QuadratureFilter(object):
         # Perform sampling
         for i in range(0, self.N_SAMPLES):
             # Set extra params to pass to optimizer
-            user_data  = {"gp":gp, "m":m, "P":P}
-            x_star, _, _ = solve(self.optimization_objective, lower_const, upper_const, 
-                             user_data=user_data, algmethod = 1, 
-                             maxT = self.opt_par["MAX_T"], 
-                             maxf = self.opt_par["MAX_F"])
+            user_data  = {"gp":gp, "m":m, "P":P, "grid_search": False}
+            
+            if (X.shape[1] == 1):
+                ''' GRID SEARCH: when we are in 1 dimension '''
+                user_data['grid_search'] = True
+                X_grid = np.linspace(lower_const[0], upper_const[0], self.opt_par["GRID_SIZE"])
+                X_grid = to_column(X_grid)
+                
+                objective = self.optimization_objective(X_grid, user_data)
 
+                max_ind = objective.index(max(objective))                
+                x_star = np.array([X_grid[max_ind]])    
+            else:
+                ''' OPTIMIZATION: for higher dimensions '''
+                x_star, _, _ = solve(self.optimization_objective, lower_const, upper_const, 
+                                 user_data=user_data, algmethod = 1, 
+                                 maxT = self.opt_par["MAX_T"], 
+                                 maxf = self.opt_par["MAX_F"])
+            
             x_star = to_row(x_star)                           
             X      = np.vstack((X, x_star))
             Y      = np.apply_along_axis(fun, 1, X, **kwargs)
-            gp     = self.gp_fit(X, Y)
-            
+            gp     = self.gp_fit(X, Y)    
         # Reoptimize GP:                             
         # TODO: Remove unique rows:
-        X  = unique_rows(X)
-        Y  = np.apply_along_axis(fun, 1, X, **kwargs)
-        gp = self.gp_fit(X, Y)   
+        if (len(unique_rows(X)) != len(X)):
+            print("Removing duplicated rows")
+            X  = unique_rows(X)
+            Y  = np.apply_along_axis(fun, 1, X, **kwargs)
+            gp = self.gp_fit(X, Y)             
             
         # Compute integral
         # Fitted GP parameters      
@@ -562,14 +584,17 @@ class QuadratureFilter(object):
         Sigma_ = CC_ = None     
         
         # TODO: Sigma computation as closed form
-        Sigma_ = w_0/np.sqrt(np.linalg.det( 2*mo.mldivide(A,P) + I) ) - (z.T).dot(mo.mldivide(K,z))
+        # Seems to cause problems!
+        # Sigma_ = w_0/np.sqrt(np.linalg.det( 2*mo.mldivide(A,P) + I) ) - (z.T).dot(mo.mldivide(K,z))
         
         # Compute cov matrix and cross cov matrix
         for i in range(0,len(W)):
         
-            # TODO: Sigma computation as sumation
-            # YY_i   = ( to_column(Y[i]-mu_) ).dot( to_row(Y[i]-mu_) )
-            # Sigma_ = W[i] * YY_i if i == 0 else Sigma_ + W[i] * YY_i
+            # TODO: Sigma computation as sumation: 
+            # Seems to work better for multidimensional problems and doesn't
+            # cause problems (might be slower though):
+            YY_i   = ( to_column(Y[i]-mu_) ).dot( to_row(Y[i]-mu_) )
+            Sigma_ = W[i] * YY_i if i == 0 else Sigma_ + W[i] * YY_i
             
             XY_i = ( to_column(X[i]-m) ).dot( to_row(Y[i]-mu_) )
             CC_  = W[i] * XY_i if i == 0 else CC_ + W[i] * XY_i

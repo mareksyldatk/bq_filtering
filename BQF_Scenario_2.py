@@ -28,9 +28,9 @@ random.seed(RAND_SEED)
 np.random.seed(RAND_SEED)
 
 # Parameters:
-N_TIME_STEPS = 10
+N_TIME_STEPS = 100
 KAPPA = 2.0
-N_PARTICLES = 1000
+N_PARTICLES = 100
     
 # Define model:
 model = bqf.SystemModel(f_type='linear', h_type='linear')
@@ -72,12 +72,13 @@ pf = bqf.ParticleFilter(model, n_particles=N_PARTICLES)
 pf_X_, X__, P_, P__ = pf.filtering(x0, p0, Y)
     
 ''' ----- QF ----- '''
-N_SAMPLES = 2
+N_SAMPLES = 4
 KERNEL    = GPy.kern.RBF(input_dim = 1, ARD=True)  
-OPT_PAR = {"MAX_T": 100, "MAX_F": 100}
+OPT_PAR = {"MAX_T": None, "MAX_F": None, "GRID_SIZE": 1000}
 
 def K_CONST(gp):
-    NUM_RESTARTS = 16
+    # Toggle off optimization
+    NUM_RESTARTS = 0
     
     gp.rbf.variance.constrain_fixed(1.0, warning=False)        
     gp.rbf.lengthscale.constrain_fixed(3.0, warning=False)
@@ -95,3 +96,9 @@ pp.plot(kf_X_, '-r')
 pp.plot(ukf_X_, '--g')
 pp.plot(pf_X_, '.-b')
 pp.plot(qf_X_, '.-m')
+
+# Print RMSE:
+print ("RMSE for EKF: " + str( np.sqrt(np.sum(np.power((X_true- kf_X_),2))/N_TIME_STEPS) ) )
+print ("RMSE for UKF: " + str( np.sqrt(np.sum(np.power((X_true-ukf_X_),2))/N_TIME_STEPS) ) )
+print ("RMSE for PF:  " + str( np.sqrt(np.sum(np.power((X_true- pf_X_),2))/N_TIME_STEPS) ) )
+print ("RMSE for QF:  " + str( np.sqrt(np.sum(np.power((X_true- qf_X_),2))/N_TIME_STEPS) ) )

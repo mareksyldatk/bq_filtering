@@ -23,16 +23,16 @@ import numpy as np
 import random
 import GPy
 
-
+pp.close('all')
 # Set random SEED:    
-RAND_SEED = 997
+RAND_SEED = 1
 random.seed(RAND_SEED)
 np.random.seed(RAND_SEED)
 
 # Parameters:
-N_TIME_STEPS = 50
+N_TIME_STEPS = 100
 KAPPA = 2.0
-N_PARTICLES = 1000
+N_PARTICLES = 100
     
 # Define model:
 model = bqf.SystemModel(f_type='nonlinear', h_type='nonlinear')
@@ -73,7 +73,7 @@ model.R = np.diag([10.0])
 x0 = np.array([[0.0]])
 p0 = np.diag([5.0])
 
-# Define states and observations:
+# Generate true states and observations:
 X_noise = np.random.multivariate_normal(np.array([0]), model.Q, N_TIME_STEPS)
 Y_noise = np.random.multivariate_normal(np.array([0]), model.R, N_TIME_STEPS)
 X_true  = x0
@@ -98,12 +98,13 @@ pf = bqf.ParticleFilter(model, n_particles=N_PARTICLES)
 pf_X_, X__, P_, P__ = pf.filtering(x0, p0, Y)
     
 ''' ----- QF ----- '''
-N_SAMPLES = 2
+N_SAMPLES = 4
 KERNEL    = GPy.kern.RBF(input_dim = 1, ARD=True)  
-OPT_PAR = {"MAX_T": 100, "MAX_F": 333}
+OPT_PAR = {"MAX_T": None, "MAX_F": None, "GRID_SIZE": 100}
 
 def K_CONST(gp):
-    NUM_RESTARTS = 16
+    # Toggle off optimization
+    NUM_RESTARTS = 0
     
     gp.rbf.variance.constrain_fixed(1.0, warning=False)        
     gp.rbf.lengthscale.constrain_fixed(3.0, warning=False)
