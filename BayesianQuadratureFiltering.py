@@ -8,7 +8,6 @@ from __future__ import division
 from DIRECT import solve
 import MatrixOperations as mo
 import numpy as np
-import scipy.stats
 import GPy
 
 '''
@@ -24,16 +23,33 @@ def symetrize_cov(P):
     return (P + P.T)/2.0
     
 def to_column(x):
-    return(x.reshape(-1,1))
+    if (x.__class__ == np.ndarray):
+        return(x.reshape(-1,1))
+    elif (x.__class__ == list):
+        return(np.array([x]).reshape(-1,1))
+    else:
+        return(np.array([[x]]).reshape(-1,1))
 
 def to_row(x):
-    return(x.reshape(1,-1))
+    if (x.__class__ == np.ndarray):
+        return(x.reshape(1,-1))
+    elif (x.__class__ == list):
+        return(np.array([x]).reshape(1,-1))
+    else:
+        return(np.array([[x]]).reshape(1,-1))
     
 def unique_rows(x):
     x = np.ascontiguousarray(x)
     unique_x = np.unique(x.view([('', x.dtype)]*x.shape[1]))
     return unique_x.view(x.dtype).reshape((unique_x.shape[0], x.shape[1]))
-
+    
+def mvn_pdf(X, mean, cov):
+    X, mean     = to_column(X), to_column(mean)
+    k           = len(cov)
+    den = np.sqrt( (2.0*np.pi)**k * np.linalg.det(cov))
+    nom = np.exp( -0.5 * ((X-mean).T).dot(np.linalg.solve(cov, (X-mean))) )
+    return( (nom/den)[0][0] )
+    
 # MODEL
 class SystemModel(object):
     ''' Model Object for a model described by the following model equations in:
@@ -315,7 +331,7 @@ class ParticleFilter(object):
                 #xi = np.apply_along_axis(self.model.f, 1, xi, k=k) + noise
                 
                 noise = np.random.multivariate_normal([0]*Q.shape[0], Q, self.N_PARTICLES)
-                xi = np.apply_along_axis(self.model.f, 1, xi, k=k) + noise.dot(B.T)
+                xi = np.apply_along_axis(self.model.f, 1, xi, k) + noise.dot(B.T)
                 
             
             # Get predictions
@@ -330,8 +346,9 @@ class ParticleFilter(object):
             # 2. Update
             G = self.model.getG()
             R = self.model.R
-            yi = np.apply_along_axis(self.model.h, 1, xi, k=k)
-            wi = np.apply_along_axis(scipy.stats.multivariate_normal(Y[k], G.dot(R).dot(G.T)).pdf, 1, yi)
+            yi = np.apply_along_axis(self.model.h, 1, xi, k)
+            # wi = np.apply_along_axis(scipy.stats.multivariate_normal(Y[k], G.dot(R).dot(G.T)).pdf, 1, yi)
+            wi = np.apply_along_axis( mvn_pdf, 1, yi, Y[k], G.dot(R).dot(G.T) )
             wi = self.normalize(wi)
             
             #
@@ -415,7 +432,7 @@ class QuadratureFilter(object):
                 B = self.model.getB(x_, k)
                 Q = self.model.Q
                 
-                x__, p__, _ = self.integrate(x_, p_, self.model.f, k=k)
+                x__, p__, _ = self.integrate(x_, p_, self.model.f, k)
                 p__         = p__ + B.dot(Q).dot(B.T)
                 p__         = symetrize_cov(p__)
             #
@@ -423,7 +440,7 @@ class QuadratureFilter(object):
             G = self.model.getG(x__, k)
             R = self.model.R
             
-            mu, S, C = self.integrate(x__, p__, self.model.h, k=k)
+            mu, S, C = self.integrate(x__, p__, self.model.h, k)
             S        = S + G.dot(R).dot(G.T)
             S        = symetrize_cov(S)
             
@@ -455,7 +472,8 @@ class QuadratureFilter(object):
                 
             
     def pi(self, X, m, P):
-        return(scipy.stats.multivariate_normal.pdf(X, m, P))
+        # return(scipy.stats.multivariate_normal.pdf(X, m, P))
+        return( mvn_pdf(X,m,P) )
         
     def optimization_objective(self, X, user_data):
         gp = user_data['gp']
@@ -466,7 +484,7 @@ class QuadratureFilter(object):
         if (grid_search == True):
             ''' GRID SEARCH: reformulate the objective for grid search '''
             _, gp_cov = gp.predict(X)
-            pi_x = self.pi(to_column(X), m.squeeze(), P)
+            pi_x   = np.apply_along_axis(self.pi, 1, X, m, P)
             pi_x   = pi_x.squeeze().tolist()
             gp_cov = gp_cov.squeeze().tolist()            
             cost = (np.power(pi_x,2) * gp_cov).squeeze().tolist()                   
@@ -503,7 +521,7 @@ class QuadratureFilter(object):
         z = (w_0/denominator) * np.exp(-.5*((a-b).T).dot(mo.mldivide((A+B),(a-b))))   
         return(z[0][0])
         
-    def integrate(self, m, P, fun, **kwargs):
+    def integrate(self, m, P, fun, *args):
         ''' Input:
             m - column vector
             P - matrix
@@ -518,7 +536,7 @@ class QuadratureFilter(object):
         # Initial sample and fitted GP:
         m = to_row(m)
         X = m
-        Y = np.apply_along_axis(fun, 1, X, **kwargs)
+        Y = np.apply_along_axis(fun, 1, X, *args)
         gp = self.gp_fit(X,Y)
         
         # Optimization constraints:
@@ -551,14 +569,14 @@ class QuadratureFilter(object):
             
             x_star = to_row(x_star)                           
             X      = np.vstack((X, x_star))
-            Y      = np.apply_along_axis(fun, 1, X, **kwargs)
+            Y      = np.apply_along_axis(fun, 1, X, *args)
             gp     = self.gp_fit(X, Y)    
         # Reoptimize GP:                             
         # TODO: Remove unique rows:
         if (len(unique_rows(X)) != len(X)):
             print("Removing duplicated rows")
             X  = unique_rows(X)
-            Y  = np.apply_along_axis(fun, 1, X, **kwargs)
+            Y  = np.apply_along_axis(fun, 1, X, *args)
             gp = self.gp_fit(X, Y)             
             
         # Compute integral

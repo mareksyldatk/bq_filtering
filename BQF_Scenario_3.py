@@ -30,7 +30,7 @@ random.seed(RAND_SEED)
 np.random.seed(RAND_SEED)
 
 # Parameters:
-N_TIME_STEPS = 100
+N_TIME_STEPS = 20
 KAPPA = 2.0
 N_PARTICLES = 100
     
@@ -38,6 +38,7 @@ N_PARTICLES = 100
 model = bqf.SystemModel(f_type='nonlinear', h_type='nonlinear')
 
 def function_f(x_k, k):
+    
     x_ = 0.5*x_k + 25.0*(x_k/(1+(x_k**2))) + 8.0*np.cos(1.2*k)
     x_ = np.array([1.0]) * x_
     return x_
@@ -98,16 +99,16 @@ pf = bqf.ParticleFilter(model, n_particles=N_PARTICLES)
 pf_X_, X__, P_, P__ = pf.filtering(x0, p0, Y)
     
 ''' ----- QF ----- '''
-N_SAMPLES = 4
+N_SAMPLES = 8
 KERNEL    = GPy.kern.RBF(input_dim = 1, ARD=True)  
-OPT_PAR = {"MAX_T": None, "MAX_F": None, "GRID_SIZE": 100}
+OPT_PAR = {"MAX_T": None, "MAX_F": None, "GRID_SIZE": 1000}
 
 def K_CONST(gp):
     # Toggle off optimization
-    NUM_RESTARTS = 0
+    NUM_RESTARTS = 4
     
     gp.rbf.variance.constrain_fixed(1.0, warning=False)        
-    gp.rbf.lengthscale.constrain_fixed(3.0, warning=False)
+    gp.rbf.lengthscale.constrain_bounded(1.0, 10.0, warning=False)
     gp.Gaussian_noise.variance.constrain_fixed(0.0001**2, warning=False) 
     
     return(gp, NUM_RESTARTS)
