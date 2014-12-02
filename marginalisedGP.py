@@ -41,87 +41,119 @@ def mrdivide(B,A):
     x_solve = (np.linalg.solve(A.T,B.T)).T
     # x_lstsq = (np.linalg.lstsq(A.T,B.T)).T
     return(x_solve)
+ 
+def mGP_predict(X_star, gp, Sigma):    
+    ARD = gp.kern.ARD
+    X_star = to_row(X_star)    
+    X_data = gp.X
+    Y      = gp.Y
+    input_dim = X_data.shape[1]
+    
+    # Form theta vector
+    theta_0 = np.array(gp.kern.variance.tolist())
+    theta_i = np.array(gp.kern.lengthscale.tolist())
+    theta   = np.vstack((theta_0, theta_i))
+    
+    # Precompute kernels
+    K_x  = gp.kern.K(X_star)
+    K_xd = gp.kern.K(to_row(X_star), X_data)
+    K    = gp.kern.K(X_data)
 
-#%% sample inputs and outputs
-N = 10
-#X = np.random.uniform(-3.,3.,(N,2))
-#Y = np.sin(X[:,0:1]) * np.sin(X[:,1:2])+np.random.randn(N,1)*0.05
+    # Compute derivatives of kernels
+    dKx_theta0  = ( K_x/theta_0 )
+    dKxd_theta0 = ( K_xd/theta_0 )
+    dK_theta0   = ( K/theta_0 )[np.newaxis]
+    
+    dKx_thetai = dKxd_thetai = dK_thetai = None
+    for i in range(0, input_dim):
+        _dKx_thetai   = 0.0
+        _dKxd_thetai = - K_xd * ( X_data[:,i] - X_star[:,i] )**2
+        _dK_thetai   = - K * ( to_column(X_data[:,i]) - to_row(X_data[:,i]) )**2
+        
+        dKx_thetai  = _dKx_thetai  if i == 0 else np.vstack((dKx_thetai,  _dKx_thetai))
+        dKxd_thetai = _dKxd_thetai if i == 0 else np.vstack((dKxd_thetai, _dKxd_thetai))
+        dK_thetai   = _dK_thetai[np.newaxis]  if i == 0 else np.vstack((dK_thetai, _dK_thetai[np.newaxis]))
+    
+    # For ard sum 
+    if (ARD == False):
+        dKx_thetai  = np.sum(dKx_thetai,0)
+        dKxd_thetai = np.sum(dKxd_thetai,0)
+        dK_thetai   = np.sum(dK_thetai,0)[np.newaxis]
+    
+    dKx_theta  = np.vstack((dKx_theta0,  dKx_thetai))
+    dKxd_theta = np.vstack((dKxd_theta0, dKxd_thetai))
+    dK_theta   = np.vstack((dK_theta0,   dK_thetai))
+    
+    # Comute dm and dV
+    D = len(theta)
+    dm_theta = np.zeros((D,1))
+    dV_theta = np.zeros((D,1))
+    
+    for i in range(0, D):
+        dm_theta[i] = (  mrdivide(to_row(dKxd_theta[i]), K)  -  K_xd.dot( mldivide(K, mrdivide(dK_theta[i], K)) )  ).dot(Y)
+        dV_theta[i] = ( 
+            dKx_theta[i]
+            - (dKxd_theta[i]).dot(mldivide(K, to_column(K_xd)))
+            - (dKxd_theta[i]).dot( mldivide(dK_theta[i], mrdivide(dK_theta[i],dK_theta[i])) ).dot(to_column(dKxd_theta[i]))
+            + (K_xd).dot(mldivide(K, to_column(dKxd_theta[i]) ))
+            )
+            
+    # Return predicted m, V, m_tilde and v_tilde
+    m, V = gp.predict(X_star)
+    V_tilde = (4.0/3.0) * V + (dm_theta.T).dot(Sigma.dot(dm_theta)) + (1.0/3.0*V)*(dV_theta.T).dot(Sigma.dot(dV_theta))
+    return(m, V, V_tilde)
 
-X = to_column(np.linspace(0,np.pi,N))
-Y = np.sin(X) + np.random.randn(N,1)*0.05
+def mGP_apply(X_star, gp, Sigma):
+    result = np.apply_along_axis( mGP_predict, 1, X_star, gp, Sigma  )
+    m = result[:,0]
+    V = result[:,1]
+    V_tilde = result[:,2]   
+    cost_bald = to_column(V_tilde / V) 
+    cost_uncertainty = to_column(V_tilde)
+    return( cost_bald, cost_uncertainty, m, V, V_tilde)
 
+''' 
+            SIMULATION   
+'''
 
-#%% define kernel
+# %% MODEL
+def model_f(x):
+    par = {'delta': 0.5, 'mu': 0.0, 'sigma': 0.75, 'A': 0.5, 'phi': 10.0, 'offset': 0.0}    
+    # Compute components of y:
+    y_a = (1.0 - np.exp(par['delta']*x)/(1+np.exp(par['delta']*x)))
+    y_b = np.exp(-(x-par['mu'])**2 / par['sigma'])
+    y_c = par['A']* np.cos(par['phi']*x)
+    # Return y:
+    y = y_a + y_b * y_c + par['offset']
+    return(y)
+
+# Generate intial data:   
+N = 20
+X = to_column(np.linspace(-np.pi,np.pi,N))
+Y = model_f(X)
+
+# Kernel and hyperparameters
 ker = GPy.kern.RBF(1,ARD=True)
-
-#%% create simple GP model
+theta = [0.35, 0.26]
+theta_Sigma = np.diag([1, 1])
 gp = GPy.models.GPRegression(X,Y,ker)
 gp.rbf.variance.constrain_positive(warning=False)
-gp.rbf.lengthscale.constrain_fixed(3.0 ,warning=False)
-gp.rbf.variance.constrain_fixed(1.0, warning=False)        
-gp.Gaussian_noise.variance.constrain_fixed(0.001**2, warning=False)
+gp.rbf.variance.constrain_fixed(theta[0], warning=False)
+gp.rbf.lengthscale.constrain_fixed(theta[1] ,warning=False)
+gp.Gaussian_noise.variance.constrain_fixed(0.01**2, warning=False)
+# gp.optimize_restarts(num_restarts=10)
 
-#def dK_theta(gp, X1, X2, Y, theta, ARD=True):
-#    ''' Derivative of K with respect to \theta '''
-#    dK_theta = None
-#    return(dK_theta)
-   
-#%%
-   
-ARD = True
-theta = [1.0, 3.0]    
-X_star = to_row(X[0]) + np.random.rand(1,2)
-X_data = X
-Y      = Y
-input_dim = X.shape[1]
-theta_0 = np.array(gp.kern.variance.tolist())
-theta_i = np.array(gp.kern.lengthscale.tolist())
+# Sample interval:
+X_star = to_column(np.linspace(-np.pi, np.pi, 1000))
+Y_star = model_f(X_star)
+cost_bald, cost_uncertainty, m, V, V_tilde = mGP_apply(X_star, gp, theta_Sigma)
 
-K_x  = gp.kern.K(X_star)
-K_xd = gp.kern.K(to_row(X_star), X_data)
-K    = gp.kern.K(X_data)
+# Plot
+plt.close('all')
+plt.plot(X_star, Y_star, '-b')
+plt.plot(X_star, m, '-r')
+plt.plot(X_star, m-np.sqrt(V), '--r'); plt.plot(X_star, m+np.sqrt(V), '--r')
+plt.plot(X_star, m-np.sqrt(V_tilde), '--g'); plt.plot(X_star, m+np.sqrt(V_tilde), '--g')
 
-# Compute d_m/d_theta_0
-dKx_theta0  = ( K_x/theta_0 )
-dKxd_theta0 = ( K_xd/theta_0 )
-dK_theta0   = ( K/theta_0 )[np.newaxis]
-
-dKx_thetai = dKxd_thetai = dK_thetai = None
-for i in range(0, input_dim):
-    _dKx_thetai   = 0.0
-    _dKxd_thetai = - K_xd * ( X_data[:,i] - X_star[:,i] )**2
-    _dK_thetai   = - K * ( to_column(X_data[:,i]) - to_row(X_data[:,i]) )**2
-    
-    dKx_thetai  = _dKx_thetai  if i == 0 else np.vstack((dKx_thetai,  _dKx_thetai))
-    dKxd_thetai = _dKxd_thetai if i == 0 else np.vstack((dKxd_thetai, _dKxd_thetai))
-    dK_thetai   = _dK_thetai[np.newaxis]  if i == 0 else np.vstack((dK_thetai, _dK_thetai[np.newaxis]))
-
-if (ARD == False):
-    dKx_thetai  = np.sum(dKx_thetai,0)
-    dKxd_thetai = np.sum(dKxd_thetai,0)
-    dK_thetai   = np.sum(dK_thetai,0)[np.newaxis]
-
-dKx_theta  = np.vstack((dKx_theta0,  dKx_thetai))
-dKxd_theta = np.vstack((dKxd_theta0, dKxd_thetai))
-dK_theta   = np.vstack((dK_theta0,   dK_thetai))
-
-#%%
-D = dKxd_theta.shape[0]
-dm_theta = np.zeros((D,1))
-dV_theta = np.zeros((D,1))
-
-for i in range(0, input_dim):
-    dm_theta[i] = (  mrdivide(to_row(dKxd_theta[i]), K)  -  K_xd.dot( mldivide(K, mrdivide(dK_theta[i], K)) )  ).dot(Y)
-    dV_theta[i] = ( 
-        dKx_theta[i]
-        - (dKxd_theta[i]).dot(mldivide(K, to_column(K_xd)))
-        - (dKxd_theta[i]).dot( mldivide(dK_theta[i], mrdivide(dK_theta[i],dK_theta[i])) ).dot(to_column(dKxd_theta[i]))
-        + (K_xd).dot(mldivide(K, to_column(dKxd_theta[i]) ))
-        )
-        
-#%% 
-Sigma = (0.001**2) * np.eye(D)
-m, V = gp.predict(X_star)
-m_tilde = m
-V_tilde = (4.0/3.0) * V + (dm_theta.T).dot(Sigma.dot(dm_theta)) + (1.0/3.0*V)*(dV_theta.T).dot(Sigma.dot(dV_theta))
-print(V, V_tilde)
+plt.figure()
+plt.plot(X_star, cost_bald )
