@@ -51,7 +51,7 @@ def mGP_predict(X_star, gp, Sigma):
     
     # Form theta vector
     theta_0 = np.array(gp.kern.variance.tolist())
-    theta_i = np.array(gp.kern.lengthscale.tolist())
+    theta_i = 1/np.array(gp.kern.lengthscale.tolist())
     theta   = np.vstack((theta_0, theta_i))
     
     # Precompute kernels
@@ -129,13 +129,13 @@ def model_f(x):
 
 # Generate intial data:   
 N = 20
-X = to_column(np.linspace(-np.pi,np.pi,N))
+X = to_column(-2*np.pi * np.random.rand(N) + np.pi)
 Y = model_f(X)
 
 # Kernel and hyperparameters
 ker = GPy.kern.RBF(1,ARD=True)
 theta = [0.35, 0.26]
-theta_Sigma = np.diag([1, 1])
+theta_Sigma = np.diag([1, 1])**2
 gp = GPy.models.GPRegression(X,Y,ker)
 gp.rbf.variance.constrain_positive(warning=False)
 gp.rbf.variance.constrain_fixed(theta[0], warning=False)
@@ -150,10 +150,14 @@ cost_bald, cost_uncertainty, m, V, V_tilde = mGP_apply(X_star, gp, theta_Sigma)
 
 # Plot
 plt.close('all')
+fig = plt.figure()
+
+fig.add_subplot(211)
 plt.plot(X_star, Y_star, '-b')
 plt.plot(X_star, m, '-r')
 plt.plot(X_star, m-np.sqrt(V), '--r'); plt.plot(X_star, m+np.sqrt(V), '--r')
 plt.plot(X_star, m-np.sqrt(V_tilde), '--g'); plt.plot(X_star, m+np.sqrt(V_tilde), '--g')
 
-plt.figure()
+fig.add_subplot(212)
 plt.plot(X_star, cost_bald )
+plt.plot(X_star, cost_uncertainty,'-r' )

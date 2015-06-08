@@ -1,0 +1,50 @@
+--------------------------------- Log file --------------------------------
+DIRECT Version 2.0.4
+ Problem Dimension n                    :      4
+ Eps value                              :   0.1000E-03
+ Maximum number of f-evaluations (maxf) :    333
+ Maximum number of iterations (MaxT)    :    333
+ Value of f_global                      :  -0.1000+101
+ Global percentage wanted               :   0.1000E-01
+ Volume percentage wanted               :  -0.1000E+01
+ Measure percentage wanted              :  -0.1000E+01
+ Epsilon is constant.
+ Our modification of the DIRECT algorithm is used.
+Bounds on variable x 1    :      4.65260 <= xi <=     12.04481
+Bounds on variable x 2    :    -20.53134 <= xi <=    -13.08118
+Bounds on variable x 3    :      0.08883 <= xi <=      7.96438
+Bounds on variable x 4    :    -12.18617 <= xi <=     -4.24652
+---------------------------------------------------------------------------
+ Iteration   # of f-eval.   fmin
+    1           9          -0.0000000000
+    2          23          -0.0000000437
+    4          49          -0.0000000616
+    5          63          -0.0000000690
+    6          71          -0.0000000769
+    8          87          -0.0000000788
+    9          95          -0.0000000790
+   11         113          -0.0000000799
+   12         129          -0.0000000800
+   13         143          -0.0000000803
+   15         167          -0.0000000803
+   16         175          -0.0000000804
+   17         181          -0.0000000804
+   18         185          -0.0000000804
+   19         197          -0.0000000805
+   20         209          -0.0000000805
+   21         217          -0.0000000805
+   23         237          -0.0000000805
+   24         247          -0.0000000805
+   25         259          -0.0000000805
+   26         265          -0.0000000805
+   30         329          -0.0000000952
+DIRECT stopped: numfunc >= maxf.
+--------------------------------- Summary --------------------------------
+Final function value           :   -0.0000001
+Number of function evaluations :          345
+Index  Final solution   x(i) - l(i)   u(i) - x(i) 
+    1   10.8127794       6.1601760      1.2320352
+    2  -17.6340508       2.8972842      4.5528751
+    3    6.6517881       6.5629597      1.3125919
+    4   -9.0985271       3.0876438      4.8520117
+---------------------------------------------------------------------------
